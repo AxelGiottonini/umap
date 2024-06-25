@@ -1,3 +1,4 @@
+import h5py
 import numpy as np
 import numba
 from sklearn.base import BaseEstimator
@@ -319,7 +320,7 @@ class AlignedUMAP(BaseEstimator):
 
         n_epochs = self.n_epochs
 
-        self.mappers_ = [
+        self.mappers_: list[UMAP] = [
             UMAP(
                 n_neighbors=get_nth_item_or_val(self.n_neighbors, n),
                 min_dist=get_nth_item_or_val(self.min_dist, n),
@@ -351,6 +352,10 @@ class AlignedUMAP(BaseEstimator):
             ).fit(X[n], y[n])
             for n in range(self.n_models_)
         ]
+
+        with h5py.File("tmp_aligned_umap.h5", "w") as f:
+            for umap_id, umap in enumerate(self.mappers_):
+                f.create_dataset(f"{umap_id}", umap.embedding_.shape, np.float32, umap.embedding_)
 
         window_size = fit_params.get("window_size", self.alignment_window_size)
         relations = expand_relations(self.dict_relations_, window_size)
@@ -428,6 +433,7 @@ class AlignedUMAP(BaseEstimator):
             seed_triplet,
             lambda_=self.alignment_regularisation,
             move_other=True,
+            verbose=self.verbose
         )
 
         for i, embedding in enumerate(self.embeddings_):
@@ -472,7 +478,7 @@ class AlignedUMAP(BaseEstimator):
                 self.repulsion_strength, self.n_models_
             ),
             learning_rate=get_nth_item_or_val(self.learning_rate, self.n_models_),
-	    init=self.init,
+	        init=self.init,
             spread=get_nth_item_or_val(self.spread, self.n_models_),
             negative_sample_rate=get_nth_item_or_val(
                 self.negative_sample_rate, self.n_models_
